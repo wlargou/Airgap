@@ -13,7 +13,7 @@ To identify the required images for Tekton deployment, download the latest relea
 
 `wget https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml`
 
-In the release yaml the image are mentionned, there are two types of images, ones requires for the installation and once required for running the pipelines 
+In the release yaml the images are mentionned, there are two types of images, ones required for the installation and ones required for running the pipelines 
 
 > Hint : Look for "image:" and "args" for the tekton controller
 
@@ -29,8 +29,7 @@ At the time of writing we identified the following images :
 8. "gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/workingdirinit:v0.49.0@sha256:643cf8dbc46fbbfb9f333628c33bbdfb76d11b5005c2aaed28abdc20f739d0b8"
 9. "cgr.dev/chainguard/busybox@sha256:19f02276bf8dbdd62f069b922f10c65262cc34b710eea26ff928129a736be791"
 10. "mcr.microsoft.com/powershell:nanoserver@sha256:b6d5ff841b78bdf2dfed7550000fd4f3437385b8fa686ec0f010be24777654d6"
-# This one will be used to test our tekton pipelines
-11. "docker.io/library/alpine:latest"
+11. "docker.io/library/alpine:latest" - This one will be used to test
 
 > Note : Image pull from microsoft will fail since we are running on linux
 
@@ -38,16 +37,15 @@ At the time of writing we identified the following images :
 - Next step is to pull the images on the bastion with internet connectivity :
 
 `nerdctl pull "gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/entrypoint:v0.49.0@sha256:0e43b6ae2d517df85aac356b411fe291057c2f12aef3a949be961cfc1d31c158"`
-...
 
-###### Step 3 : Save images to disk ######
+## Step 3 : Save images to disk
 - Create a folder to hold all the compressed images and run for all images :
 
 `nerdctl save -o tekton-events.tar "gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/events:v0.49.0@sha256:968999c9f4ba1003725a9455f9a3a2cba36766768e4f1ee40010fafa765f450d"`
 
 - Then copy all the compressed images to one of your Kubernetes nodes (scp, usb, ...)
 
-###### Step 4 : Preparing images ######
+## Step 4 : Preparing images 
 - Login to your registry :
 
 `registry_url=$(kubectl get svc registry -n kurl -o=jsonpath='{.spec.clusterIP}'):443`
@@ -59,7 +57,7 @@ At the time of writing we identified the following images :
 - Then load all your images :
 
 `nerdctl -n k8s.io load -i tekton-events.tar`
-...
+
 
 - Verify all images are loaded :
 
@@ -68,14 +66,14 @@ At the time of writing we identified the following images :
 - Tag your images :
 
 `nerdctl -n k8s.io image tag gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/events:v0.49.0@sha256:968999c9f4ba1003725a9455f9a3a2cba36766768e4f1ee40010fafa765f450d $registry_url/tekton-releases/github.com/tektoncd/pipeline/cmd/events:v0.49.0`
-...
+
 
 - Finally push the images to the registry :
 
 `nerdctl -n k8s.io push $registry_url/tekton-releases/github.com/tektoncd/pipeline/cmd/events:v0.49.0`
-...
 
-###### Step 5 : Start the deployment ######
+
+## Step 5 : Start the deployment 
 Open release.yaml and edit all the references pointing to the online registry to reference your local registry : my_private_registry:443/tekton-releases/github.com/tektoncd/pipeline/cmd/events:v0.49.0.
 
 - Finally run the deployment :
@@ -85,5 +83,52 @@ Open release.yaml and edit all the references pointing to the online registry to
 - And check the status of the pods :
 
 `kubectl get pods -n tekton-pipelines`
+
+# Tekton Test
+
+To test our deployment, let's create a simple task :
+
+- Create a file for the task hello-world.yaml : 
+```
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: hello
+spec:
+  steps:
+    - name: echo
+      image: my_private_registry/library/alpine:latest
+      script: |
+        #!/bin/sh
+        echo "Hello World"
+```
+
+- Then create a file for the task run hello-world-run.yaml
+```
+apiVersion: tekton.dev/v1beta1
+kind: TaskRun
+metadata:
+  name: hello-task-run
+spec:
+  taskRef:
+    name: hello
+```
+
+- Apply the files created :
+
+`kubectl apply --f hello-world.yaml`
+`kubectl apply --f hello-world-run.yaml`
+
+- Check results :
+
+`kubectl get taskrun hello-task-run`
+
+**Example :** 
+NAME                    SUCCEEDED    REASON       STARTTIME   COMPLETIONTIME
+ hello-task-run          True         Succeeded    22h         22h
+
+- Check output of the task 
+
+`kubectl logs --selector=tekton.dev/taskRun=hello-task-run`
 
 # Tested versions :
