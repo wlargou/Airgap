@@ -123,7 +123,8 @@ spec:
 
 `kubectl get taskrun hello-task-run`
 
-**Example :** 
+**Example :**
+ 
 NAME                    SUCCEEDED    REASON       STARTTIME   COMPLETIONTIME
  hello-task-run          True         Succeeded    22h         22h
 
